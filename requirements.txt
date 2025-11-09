@@ -1,26 +1,7 @@
-# Core Framework
-streamlit==1.40.0
-
-# Data & Analysis
-pandas==2.2.3
-numpy==1.26.4
-scikit-learn==1.5.2
-
-# Visualization
-plotly==5.24.1
-matplotlib==3.9.2
-seaborn==0.13.2
-wordcloud==1.9.3
-
-# Sentiment Analysis
-vaderSentiment==3.3.2
-nltk==3.9.1
-
-# Optional AI/NLP (for semantic search & topic clustering)
-sentence-transformers==3.2.1
-umap-learn==0.5.7
-hdbscan==0.8.39
-
-# Utility
-tqdm==4.66.5
-python-dateutil==2.9.0
+streamlit
+pandas
+numpy
+plotly
+matplotlib
+wordcloud
+vaderSentiment
