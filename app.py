@@ -1,6 +1,8 @@
 # ==========================================
-# FeedTrack 2.0 — Company Review Analyzer
+# FeedTrack — Company Review Analytics Dashboard
+# Author: Rohit Pal
 # ==========================================
+
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -15,27 +17,31 @@ st.set_page_config(page_title="FeedTrack - Review Insights Dashboard", layout="w
 
 st.title("📊 FeedTrack — Company Review Analytics Dashboard")
 st.markdown("""
-Analyze company feedback datasets and auto-generate insights on sentiment, ratings, and trends.  
-Upload your `.csv` file below to get started (e.g., `zepto_reviews.csv`, `swiggy_reviews.csv`, etc.)
+Analyze company review datasets and generate insights on sentiment, ratings, and trends.  
+Upload your `.csv` file below to explore results interactively.
 """)
 
 # ---------------- FILE UPLOAD ----------------
 uploaded_file = st.file_uploader("📁 Upload Company Review CSV", type=["csv"])
 
 if uploaded_file is not None:
-    # Read CSV using pandas read_csv
-    df = pd.read_csv(uploaded_file, parse_dates=["Date"], dayfirst=False)
+    # --- Read CSV using pandas ---
+    try:
+        df = pd.read_csv(uploaded_file, parse_dates=["Date"], dayfirst=False)
+    except Exception as e:
+        st.error(f"❌ Error reading CSV: {e}")
+        st.stop()
 
-    # ---------------- DATA CLEANING ----------------
+    # --- Clean column names ---
     df.columns = df.columns.str.strip().str.title()
+
     if "Review" not in df.columns:
         st.error("❌ The uploaded file must contain a 'Review' column.")
         st.stop()
 
     company_name = df["Company"].iloc[0] if "Company" in df.columns else "Uploaded Dataset"
-
     st.success(f"✅ Loaded dataset for **{company_name}** with {len(df)} reviews.")
-    st.write(df.head())
+    st.dataframe(df.head())
 
     # ---------------- SENTIMENT ANALYSIS ----------------
     st.subheader("🧠 Sentiment Analysis")
@@ -64,7 +70,7 @@ if uploaded_file is not None:
     pos_percent = (df["Sentiment_Label"] == "Positive").mean() * 100
     neg_percent = (df["Sentiment_Label"] == "Negative").mean() * 100
 
-    col1.metric("Average Rating", f"{avg_rating:.2f}")
+    col1.metric("Average Rating", f"{avg_rating:.2f}" if not np.isnan(avg_rating) else "N/A")
     col2.metric("Positive Sentiment", f"{pos_percent:.1f}%")
     col3.metric("Negative Sentiment", f"{neg_percent:.1f}%")
 
@@ -76,6 +82,7 @@ if uploaded_file is not None:
     with tab1:
         col1, col2 = st.columns(2)
 
+        # Rating Distribution
         if "Rating" in df.columns:
             fig1 = px.histogram(
                 df, x="Rating", color="Sentiment_Label", nbins=10,
@@ -83,6 +90,7 @@ if uploaded_file is not None:
             )
             col1.plotly_chart(fig1, use_container_width=True)
 
+        # Sentiment Pie
         fig2 = px.pie(
             df, names="Sentiment_Label",
             title="Overall Sentiment Composition",
@@ -104,22 +112,43 @@ if uploaded_file is not None:
 
     with tab3:
         col1, col2 = st.columns(2)
+
+        # --- Department Chart ---
         if "Department" in df.columns:
-            fig3 = px.box(df, x="Department", y="Rating", color="Department",
-                          title="Rating by Department", points="all")
+            fig3 = px.box(
+                df, x="Department", y="Rating", color="Department",
+                title="Rating by Department", points="all"
+            )
             col1.plotly_chart(fig3, use_container_width=True)
+        else:
+            col1.info("No Department column found.")
+
+        # --- Fixed Source Chart (bug-free) ---
         if "Source" in df.columns:
-            fig4 = px.bar(df["Source"].value_counts().reset_index(),
-                          x="index", y="Source",
-                          title="Review Source Count", color="index")
+            source_df = df["Source"].value_counts().reset_index()
+            source_df.columns = ["Source", "Count"]
+            fig4 = px.bar(
+                source_df,
+                x="Source", y="Count",
+                title="Review Source Count",
+                color="Source",
+                text="Count"
+            )
+            fig4.update_traces(textposition="outside")
             col2.plotly_chart(fig4, use_container_width=True)
+        else:
+            col2.info("No Source column found.")
 
     # ---------------- TIME SERIES ----------------
-    st.subheader("📆 Rating Over Time")
     if "Date" in df.columns:
-        df = df.sort_values("Date")
-        fig5 = px.line(df, x="Date", y="Rating", color="Sentiment_Label", markers=True,
-                       title=f"Rating Trend Over Time — {company_name}")
+        st.subheader("📆 Rating Over Time")
+        df_sorted = df.sort_values("Date")
+        fig5 = px.line(
+            df_sorted, x="Date", y="Rating",
+            color="Sentiment_Label",
+            markers=True,
+            title=f"Rating Trend Over Time — {company_name}"
+        )
         st.plotly_chart(fig5, use_container_width=True)
 
     # ---------------- AUTO INSIGHTS ----------------
@@ -128,21 +157,21 @@ if uploaded_file is not None:
     insights = []
     insights.append(f"Average rating is **{avg_rating:.2f}** with {pos_percent:.1f}% positive sentiment.")
     if neg_percent > 30:
-        insights.append("⚠️ High negative sentiment detected — employee dissatisfaction needs review.")
+        insights.append("⚠️ High negative sentiment detected — potential employee dissatisfaction.")
     if avg_rating >= 4.0:
-        insights.append("🌟 Excellent overall satisfaction level — culture and policies are appreciated.")
+        insights.append("🌟 Excellent overall satisfaction — company culture seems strong.")
     if "Department" in df.columns:
         dept_avg = df.groupby("Department")["Rating"].mean().sort_values()
-        worst_dept = dept_avg.index[0]
-        insights.append(f"Lowest average rating department: **{worst_dept} ({dept_avg.iloc[0]:.2f})**.")
+        if not dept_avg.empty:
+            insights.append(f"Lowest-rated department: **{dept_avg.index[0]} ({dept_avg.iloc[0]:.2f})**.")
     if "Source" in df.columns:
         top_source = df["Source"].value_counts().idxmax()
         insights.append(f"Most reviews collected from **{top_source}**.")
 
-    for i in insights:
-        st.markdown(f"- {i}")
+    for insight in insights:
+        st.markdown(f"- {insight}")
 
-    # ---------------- EXPORT SECTION ----------------
+    # ---------------- EXPORT ----------------
     st.subheader("📥 Export Processed Data")
 
     csv_out = df.to_csv(index=False).encode("utf-8")
